@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Two gates, split to keep the (expensive) macOS runner doing only the iOS work:
+#   1. analyze + unit test the pure-Dart package on Linux (cheap, no macOS minutes)
+#   2. compile the example app for the iOS Simulator on macOS (no code signing,
+#      no API key — the example builds against its default `it_TEST_KEY`).
+# Signed device/TestFlight builds are handled separately (Codemagic).
+jobs:
+  analyze-test:
+    name: Analyze + unit test (package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  ios-build:
+    name: Build example for iOS Simulator (no signing)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter --version
+      - name: Generate iOS runner + compile (no codesign, no key)
+        working-directory: example
+        run: |
+          # The committed example only ships android/; generate the ios/ runner
+          # without touching the existing lib/ or pubspec.
+          flutter create --platforms=ios .
+          flutter pub get
+          flutter build ios --simulator
