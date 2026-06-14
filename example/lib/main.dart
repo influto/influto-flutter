@@ -1,82 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:influto/influto.dart';
 
-// API key from a build-time --dart-define so a REAL key is never committed.
-// Default is a harmless placeholder → a real key can't ship by accident.
-// To test:  flutter run --dart-define=INFLUTO_API_KEY=it_live_yourkey
-const _apiKey = String.fromEnvironment('INFLUTO_API_KEY', defaultValue: 'it_TEST_KEY');
+import 'purchase_manager.dart';
+import 'referral_field.dart';
+import 'sample_backend.dart';
 
-void main() => runApp(const DemoApp());
+/// The full InfluTo Flutter flow, top to bottom — a copy-paste reference:
+/// 1 configure → 2 attribution → 3 referral input → 4 paywall (in_app_purchase
+/// → reportPurchase) → 5 confirm it landed in InfluTo.
+///
+/// API key defaults from --dart-define=INFLUTO_API_KEY (never committed) but is
+/// editable at runtime; defaults to the harmless `it_TEST_KEY` (backend rejects).
+const _defaultApiKey =
+    String.fromEnvironment('INFLUTO_API_KEY', defaultValue: 'it_TEST_KEY');
+const _baseUrl = 'https://influ.to/api';
 
-class DemoApp extends StatelessWidget {
-  const DemoApp({super.key});
+void main() => runApp(const InfluToSampleApp());
+
+class InfluToSampleApp extends StatelessWidget {
+  const InfluToSampleApp({super.key});
+
   @override
-  Widget build(BuildContext context) => const MaterialApp(home: DemoScreen());
+  Widget build(BuildContext context) =>
+      const MaterialApp(title: 'InfluTo Sample', home: SampleScreen());
 }
 
-class DemoScreen extends StatefulWidget {
-  const DemoScreen({super.key});
+class SampleScreen extends StatefulWidget {
+  const SampleScreen({super.key});
+
   @override
-  State<DemoScreen> createState() => _DemoScreenState();
+  State<SampleScreen> createState() => _SampleScreenState();
 }
 
-class _DemoScreenState extends State<DemoScreen> {
-  final _log = StringBuffer();
-  void _line(String s) => setState(() => _log.writeln(s));
+class _SampleScreenState extends State<SampleScreen> {
+  final _apiKey = TextEditingController(text: _defaultApiKey);
+  final _productId = TextEditingController(text: 'to.influ.sample.pro.monthly');
+  final _appUserId = TextEditingController(text: 'sample-flutter');
 
-  Future<void> _run() async {
+  bool _initialized = false;
+  String _status = 'Not initialized';
+  String _attribution = '—';
+  String? _appliedCode;
+  String _result = '';
+  String _landed = '';
+  PurchaseManager? _purchases;
+
+  Future<void> _initialize() async {
     try {
-      // 1. initialize
-      await InfluTo.instance.initialize(const InfluToConfig(
-        apiKey: _apiKey,
+      await InfluTo.instance.initialize(InfluToConfig(
+        apiKey: _apiKey.text,
         debug: true,
-        // revenueCatHook: (attrs) => Purchases.setAttributes(attrs), // if RC installed
-      ),);
-      _line('init ok');
-
-      // 2. checkAttribution (IP + fingerprint match)
-      final attr = await InfluTo.instance.checkAttribution();
-      _line('attributed=${attr.attributed} code=${attr.referralCode}');
-
-      // 3. validateCode
-      final v = await InfluTo.instance.validateCode('FITGURU30');
-      _line('valid=${v.valid} ${v.campaign?.name ?? v.error}');
-
-      // 4. identify + trackEvent
-      await InfluTo.instance.identifyUser('user_123');
-      await InfluTo.instance.trackEvent(
-        const TrackEventOptions(
-            eventType: 'paywall_viewed', appUserId: 'user_123',),
+        apiUrl: _baseUrl,
+        appVersion: 'sample-flutter-1.0',
+      ));
+      await InfluTo.instance.identifyUser(_appUserId.text);
+      final a = await InfluTo.instance.checkAttribution();
+      final code = await InfluTo.instance.getReferralCode();
+      _purchases = PurchaseManager(
+        appUserId: () => _appUserId.text,
+        referralCode: () => _appliedCode,
+        onResult: (s) => setState(() => _result = s),
       );
-      _line('identify + trackEvent sent');
-
-      // 5. reportPurchase (store-direct): the host obtains the proof from
-      //    in_app_purchase / purchases_flutter and passes it in.
-      //    iOS:     signedTransaction = details.verificationData.serverVerificationData
-      //    Android: purchaseToken     = details.verificationData.serverVerificationData
-      // final r = await InfluTo.instance.reportPurchase(
-      //   platform: 'android', purchaseToken: token, appUserId: 'user_123');
-      // _line('purchase success=${r.success} validated=${r.validated}');
+      await _purchases!.start();
+      if (!mounted) return;
+      setState(() {
+        _initialized = true;
+        _status = '✅ Initialized as ${_appUserId.text}';
+        _attribution = a.attributed
+            ? 'Attributed → ${a.referralCode}'
+            : 'Organic (no attribution link)';
+        _appliedCode = code;
+      });
     } catch (e) {
-      _line('ERR $e');
+      if (!mounted) return;
+      setState(() {
+        _initialized = false;
+        _status = '❌ Init failed: $e';
+      });
     }
   }
 
+  Future<void> _checkLanded() async {
+    final s = await SampleBackend.recentConversionsSummary(
+      baseUrl: _baseUrl, apiKey: _apiKey.text, appUserId: _appUserId.text,
+    );
+    if (!mounted) return;
+    setState(() => _landed = s);
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('InfluTo demo')),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ElevatedButton(
-                  onPressed: _run, child: const Text('Run InfluTo flow'),),
-              const SizedBox(height: 12),
-              Expanded(
-                  child: SingleChildScrollView(child: Text(_log.toString())),),
-            ],
+  void dispose() {
+    _purchases?.dispose();
+    _apiKey.dispose();
+    _productId.dispose();
+    _appUserId.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('InfluTo Sample')),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        const _Title('1 · Configuration'),
+        TextField(controller: _apiKey, decoration: const InputDecoration(labelText: 'InfluTo API key')),
+        TextField(controller: _productId, decoration: const InputDecoration(labelText: 'Product ID (SKU)')),
+        TextField(controller: _appUserId, decoration: const InputDecoration(labelText: 'App user ID')),
+        const SizedBox(height: 8),
+        ElevatedButton(onPressed: _initialize, child: Text(_initialized ? 'Re-initialize' : 'Initialize SDK')),
+        Text(_status),
+        if (_initialized) ...[
+          const _Title('2 · Attribution'),
+          Text('Attribution: $_attribution'),
+          if (_appliedCode != null) Text('Stored code: $_appliedCode'),
+          const _Title('3 · Referral code (test attribution)'),
+          ReferralCodeField(
+            appUserId: _appUserId.text,
+            onApplied: (c) => setState(() => _appliedCode = c),
           ),
-        ),
+          const _Title('4 · Paywall'),
+          const Text('Buys via in_app_purchase, then calls reportPurchase with the store proof.'),
+          ElevatedButton(
+            onPressed: () => _purchases?.buy(_productId.text),
+            child: Text('Buy ${_productId.text}'),
+          ),
+          const _Title('5 · Result'),
+          if (_result.isNotEmpty) Text(_result),
+          ElevatedButton(onPressed: _checkLanded, child: const Text('Did it land in InfluTo?')),
+          if (_landed.isNotEmpty) Text(_landed),
+        ],
+        const SizedBox(height: 24),
+      ]),
+    );
+  }
+}
+
+class _Title extends StatelessWidget {
+  const _Title(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 16, bottom: 4),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
       );
 }
