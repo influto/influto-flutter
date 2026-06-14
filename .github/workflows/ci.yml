@@ -22,7 +22,9 @@ jobs:
           channel: stable
       - run: flutter --version
       - run: flutter pub get
-      - run: flutter analyze
+      # Scope analysis to the published package (lib + test); the throwaway example/
+      # is compile-checked by the ios-build job instead.
+      - run: flutter analyze lib test
       - run: flutter test
 
   ios-build:

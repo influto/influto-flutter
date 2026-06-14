@@ -1,5 +1,5 @@
 /// InfluTo Flutter SDK — influencer attribution + store-direct purchase validation.
-library influto;
+library;
 
 export 'src/config.dart';
 export 'src/influto_base.dart' show InfluTo;
