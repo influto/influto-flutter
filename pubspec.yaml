@@ -1,0 +1,23 @@
+name: influto
+description: >-
+  Track influencer referrals, attribution, and store-direct purchase validation
+  in your Flutter app. Mirrors the InfluTo React Native SDK.
+version: 1.0.0
+homepage: https://influ.to
+repository: https://github.com/influto/influto-flutter
+topics: [attribution, affiliate, influencer, referral, revenuecat]
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ">=1.0.0 <2.0.0"
+  shared_preferences: ">=2.0.0 <3.0.0"
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ">=4.0.0 <6.0.0"
