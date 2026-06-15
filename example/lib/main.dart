@@ -114,6 +114,16 @@ class _SampleScreenState extends State<SampleScreen> {
           Text('Attribution: $_attribution'),
           if (_appliedCode != null) Text('Stored code: $_appliedCode'),
           const _Title('3 · Referral code (test attribution)'),
+          const Text('A · Prebuilt SDK component', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ReferralCodeInput(
+            appUserId: _appUserId.text,
+            onApplied: (_) async {
+              final c = await InfluTo.instance.getReferralCode();
+              if (mounted) setState(() => _appliedCode = c);
+            },
+          ),
+          const Divider(),
+          const Text('B · Custom (build your own UI)', style: TextStyle(fontSize: 12, color: Colors.grey)),
           ReferralCodeField(
             appUserId: _appUserId.text,
             onApplied: (c) => setState(() => _appliedCode = c),
