@@ -1,0 +1,42 @@
+# Used by `dart pub publish` for the `influto` package. The companion `influto_iap`
+# (the flutter_iap/ directory) is published as its OWN package — exclude it here so it
+# isn't bundled inside `influto`. The rest mirrors .gitignore (build/tooling artifacts).
+flutter_iap/
+
+# Build / tooling
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+**/build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+**/pubspec.lock
+**/.flutter-plugins
+**/GeneratedPluginRegistrant.*
+**/generated_plugin_registrant.*
+
+# Example app — Android
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/.idea/
+**/android/captures/
+
+# Example app — iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Runner.xcworkspace/xcuserdata/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
