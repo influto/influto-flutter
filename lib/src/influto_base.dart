@@ -30,6 +30,12 @@ class InfluTo {
   ApiClient? _api;
   Storage? _storage;
   bool _initialized = false;
+  bool _storeDirect = false;
+
+  /// True when auto-capture should run: the app is store-direct (per `/sdk/init`) AND the
+  /// host hasn't opted out via `InfluToConfig.autoCapture: false`. The `influto_iap`
+  /// `InfluToPurchaseObserver` reads this so RevenueCat apps are never captured.
+  bool get autoCaptureEnabled => _storeDirect && (_config?.autoCapture ?? true);
 
   bool get _debug => _config?.debug ?? false;
   void _log(String msg) {
@@ -76,6 +82,7 @@ class InfluTo {
       });
       if (resp['initialized'] == true) {
         _initialized = true;
+        _storeDirect = resp['store_direct'] == true;
         await _storage!.putString(Storage.initialized, 'true');
         _log('SDK initialized');
       }
@@ -87,7 +94,7 @@ class InfluTo {
 
   // ------------------------------------------------------------- checkAttribution
 
-  /// Track install + resolve IP/fingerprint attribution. Fail-soft → `attributed:false`.
+  /// Track install + resolve install attribution. Fail-soft → `attributed:false`.
   Future<AttributionResult> checkAttribution() async {
     if (!_initialized) {
       throw InfluToException(
@@ -270,6 +277,85 @@ class InfluTo {
     return validation.copyWith(applied: set.success);
   }
 
+  // ------------------------------------------------------------------- checkAccess
+
+  AccessResult? _accessCache;
+  String? _accessCacheUid;
+  int _accessCacheTs = 0;
+
+  /// Server-authoritative premium-access check (platform-independent comp). Works for BOTH
+  /// RevenueCat and store-direct apps. Fail-soft → `AccessResult(hasAccess:false)`; caches a
+  /// positive result ~5 min. Gate premium on
+  /// `rcEntitlementActive || (await InfluTo.instance.checkAccess(uid)).hasAccess`.
+  Future<AccessResult> checkAccess({String? appUserId}) async {
+    if (!_initialized) return const AccessResult(hasAccess: false);
+    final uid = appUserId ?? _storage?.getString(Storage.appUserId);
+    if (uid == null) return const AccessResult(hasAccess: false);
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_accessCache != null &&
+        _accessCacheUid == uid &&
+        _accessCache!.hasAccess &&
+        now - _accessCacheTs < 300000) {
+      return _accessCache!;
+    }
+    // Persisted positive cache survives cold starts (same 5-min TTL as the in-memory one).
+    final persisted = _loadPersistedAccess(uid, now);
+    if (persisted != null) return persisted;
+    try {
+      final escaped = Uri.encodeQueryComponent(uid);
+      final resp = await _api!.getObject('/sdk/access?app_user_id=$escaped');
+      final result = AccessResult.fromJson(resp);
+      if (result.hasAccess) await _persistAccess(uid, result, now);
+      return result;
+    } catch (e) {
+      _log('checkAccess error: $e');
+      return const AccessResult(hasAccess: false);
+    }
+  }
+
+  /// Cache a positive access result in memory + persist it under [Storage.access].
+  Future<void> _persistAccess(String uid, AccessResult result, int now) async {
+    _accessCache = result;
+    _accessCacheUid = uid;
+    _accessCacheTs = now;
+    try {
+      final env = {
+        'uid': uid,
+        'ts': now,
+        'access': {
+          'has_access': result.hasAccess,
+          'source': result.source,
+          'entitlement': result.entitlement,
+          'expires_at': result.expiresAt,
+          'code': result.code,
+        },
+      };
+      await _storage?.putString(Storage.access, jsonEncode(env));
+    } catch (_) {/* best-effort; server is the backstop */}
+  }
+
+  /// Read a still-valid (~5 min) persisted positive access result for [uid], else null.
+  AccessResult? _loadPersistedAccess(String uid, int now) {
+    final raw = _storage?.getString(Storage.access);
+    if (raw == null) return null;
+    try {
+      final env = jsonDecode(raw);
+      if (env is! Map || env['uid'] != uid) return null;
+      final ts = (env['ts'] as num?)?.toInt() ?? 0;
+      if (now - ts >= 300000) return null;
+      final result =
+          AccessResult.fromJson(Map<String, dynamic>.from(env['access'] as Map));
+      if (!result.hasAccess) return null;
+      _accessCache = result;
+      _accessCacheUid = uid;
+      _accessCacheTs = ts;
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --------------------------------------------------------------- reportPurchase
 
   /// Store-direct purchase report (no RevenueCat). The host obtains the proof from its
@@ -280,6 +366,9 @@ class InfluTo {
     required String platform,
     String? signedTransaction,
     String? purchaseToken,
+    String? productId,
+    double? price,
+    String? currency,
     String? appUserId,
     String? referralCode,
   }) async {
@@ -290,6 +379,10 @@ class InfluTo {
       'platform': platform.toLowerCase(),
       if (signedTransaction != null) 'signedTransaction': signedTransaction,
       if (purchaseToken != null) 'purchaseToken': purchaseToken,
+      // One-time products only: productId routes to products.get; price is what the user paid.
+      if (productId != null) 'productId': productId,
+      if (price != null) 'price': price,
+      if (currency != null) 'currency': currency,
       if (code != null) 'referralCode': code,
       if (user != null) 'appUserId': user,
     });

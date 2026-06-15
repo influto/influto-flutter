@@ -25,7 +25,7 @@ void main() {
           jsonEncode({
             'attributed': true,
             'referral_code': 'FITGURU30',
-            'attribution_method': 'ip_fingerprint_match',
+            'attribution_method': 'ip_device_match',
             'message': 'ok',
           }),
           200,

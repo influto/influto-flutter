@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:influto/influto.dart';
+import 'package:influto_iap/influto_iap.dart';
 
 import 'purchase_manager.dart';
 import 'referral_field.dart';
@@ -43,7 +44,9 @@ class _SampleScreenState extends State<SampleScreen> {
   String? _appliedCode;
   String _result = '';
   String _landed = '';
+  String _autoSync = '';
   PurchaseManager? _purchases;
+  InfluToPurchaseObserver? _observer;
 
   Future<void> _initialize() async {
     try {
@@ -80,6 +83,16 @@ class _SampleScreenState extends State<SampleScreen> {
     }
   }
 
+  // Opt-in auto-capture (via the influto_iap companion): listen to in_app_purchase +
+  // back-sync existing purchases. Alternative to wiring reportPurchase yourself.
+  Future<void> _enableAutoCapture() async {
+    _observer ??= InfluToPurchaseObserver(debug: true);
+    final r = await _observer!.enable();
+    if (!mounted) return;
+    setState(() =>
+        _autoSync = 'fetched=${r.fetched} · sent=${r.sent} · failed=${r.failed}');
+  }
+
   Future<void> _checkLanded() async {
     final s = await SampleBackend.recentConversionsSummary(
       baseUrl: _baseUrl, apiKey: _apiKey.text, appUserId: _appUserId.text,
@@ -90,6 +103,7 @@ class _SampleScreenState extends State<SampleScreen> {
 
   @override
   void dispose() {
+    _observer?.dispose();
     _purchases?.dispose();
     _apiKey.dispose();
     _productId.dispose();
@@ -138,6 +152,15 @@ class _SampleScreenState extends State<SampleScreen> {
           if (_result.isNotEmpty) Text(_result),
           ElevatedButton(onPressed: _checkLanded, child: const Text('Did it land in InfluTo?')),
           if (_landed.isNotEmpty) Text(_landed),
+          const _Title('6 · Auto-capture (default)'),
+          const Text('On store-direct apps, adding the influto_iap package makes the SDK '
+              'auto-report purchases (no manual reportPurchase). Enable the observer once; it '
+              'self-gates on store-direct. This runs it + a back-sync.'),
+          ElevatedButton(
+            onPressed: _enableAutoCapture,
+            child: const Text('Enable auto-capture + back-sync'),
+          ),
+          if (_autoSync.isNotEmpty) Text(_autoSync),
         ],
         const SizedBox(height: 24),
       ]),

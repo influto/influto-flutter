@@ -211,8 +211,25 @@ class SetCodeResult {
   final String? message;
   final CampaignInfo? campaign;
 
-  const SetCodeResult(
-      {required this.success, this.code, this.message, this.campaign,});
+  /// True when this code is a developer free-access (comp) code.
+  final bool? freeAccess;
+  /// True when the backend granted native premium access for this redemption.
+  final bool? grantsAccess;
+  /// Granted entitlement id/lookup-key, if any.
+  final String? entitlement;
+  /// ISO-8601 expiry, or null for open-ended.
+  final String? expiresAt;
+
+  const SetCodeResult({
+    required this.success,
+    this.code,
+    this.message,
+    this.campaign,
+    this.freeAccess,
+    this.grantsAccess,
+    this.entitlement,
+    this.expiresAt,
+  });
 
   factory SetCodeResult.fromJson(Map<String, dynamic> j) => SetCodeResult(
         success: j['success'] == true,
@@ -221,6 +238,35 @@ class SetCodeResult {
         campaign: j['campaign'] is Map<String, dynamic>
             ? CampaignInfo.fromJson(j['campaign'] as Map<String, dynamic>)
             : null,
+        freeAccess: j['free_access'] as bool?,
+        grantsAccess: j['grants_access'] as bool?,
+        entitlement: j['entitlement'] as String?,
+        expiresAt: j['expires_at'] as String?,
+      );
+}
+
+/// Result of [InfluTo.checkAccess] — server-authoritative premium access (platform-independent comp).
+class AccessResult {
+  final bool hasAccess;
+  final String? source;
+  final String? entitlement;
+  final String? expiresAt;
+  final String? code;
+
+  const AccessResult({
+    required this.hasAccess,
+    this.source,
+    this.entitlement,
+    this.expiresAt,
+    this.code,
+  });
+
+  factory AccessResult.fromJson(Map<String, dynamic> j) => AccessResult(
+        hasAccess: j['has_access'] == true,
+        source: j['source'] as String?,
+        entitlement: j['entitlement'] as String?,
+        expiresAt: j['expires_at'] as String?,
+        code: j['code'] as String?,
       );
 }
 

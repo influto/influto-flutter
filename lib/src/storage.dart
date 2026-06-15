@@ -7,6 +7,7 @@ class Storage {
   static const String influtoCode = '@influto/influto_code';
   static const String appUserId = '@influto/app_user_id';
   static const String initialized = '@influto/initialized';
+  static const String access = '@influto/access';
 
   final SharedPreferences _prefs;
   Storage._(this._prefs);

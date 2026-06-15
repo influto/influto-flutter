@@ -1,8 +1,14 @@
 # influto (Flutter)
 
 Influencer attribution + store-direct purchase validation for Flutter. Pure Dart —
-only `http` + `shared_preferences`. Mirrors the [InfluTo React Native SDK](../../sdk)
-and the [canonical contract](../contract/CONTRACT.md).
+only `http` + `shared_preferences`. Mirrors the [InfluTo React Native SDK](https://github.com/influto/influto-react-native)
+and the [canonical contract](./CONTRACT.md).
+
+## Prerequisites
+
+You need a free **InfluTo account** — sign up at [https://influ.to](https://influ.to), create your
+app in the dashboard, and copy your API key (it starts with `it_`). For store-direct purchase
+validation / auto-capture, also add your Apple/Google store credentials to the app in the dashboard.
 
 ## Install
 

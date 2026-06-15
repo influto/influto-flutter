@@ -49,6 +49,18 @@ class ApiClient {
     return decoded is List ? decoded : <dynamic>[];
   }
 
+  Future<Map<String, dynamic>> getObject(String path) async {
+    final http.Response resp;
+    try {
+      resp = await _client.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    } catch (e) {
+      throw InfluToException(message: 'transport: $e');
+    }
+    _ensureOk(resp);
+    final decoded = jsonDecode(resp.body);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
+
   void _ensureOk(http.Response resp) {
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw InfluToException(statusCode: resp.statusCode, body: resp.body);
