@@ -50,7 +50,7 @@ class ReferralCodeInput extends StatefulWidget {
   /// Show `campaign.name` once applied. @default false
   final bool showCampaignName;
 
-  /// Show "Referred by <influencer name>" once applied. @default false
+  /// Show the influencer's name ("Referred by ...") once applied. @default false
   final bool showReferrerName;
 
   final String? title;
@@ -181,6 +181,7 @@ class _ReferralCodeInputState extends State<ReferralCodeInput> {
           padding: const EdgeInsets.only(top: 4),
           child: Text('Referred by ${_result!.influencer!.name}', style: theme.textTheme.bodySmall),
         ),
-    ]);
+      ],
+    );
   }
 }
