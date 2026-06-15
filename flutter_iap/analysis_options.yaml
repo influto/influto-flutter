@@ -1,0 +1,9 @@
+# Companion package lint config. Uses the standard flutter_lints set. We intentionally do NOT
+# enable `require_trailing_commas` here (the root `influto` package does) — its comma placement
+# is sensitive to the exact Dart formatter version, which causes needless churn for this small
+# package. flutter_lints already covers the lints that matter.
+include: package:flutter_lints/flutter.yaml
+linter:
+  rules:
+    public_member_api_docs: false
+    prefer_const_constructors: true
