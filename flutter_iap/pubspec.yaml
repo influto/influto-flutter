@@ -15,10 +15,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Monorepo path dependency for local dev/CI. BEFORE PUBLISHING to pub.dev, swap this
-  # for a hosted constraint: `influto: ">=1.0.0 <2.0.0"`.
-  influto:
-    path: ../
+  influto: "^1.0.0"
   in_app_purchase: ">=3.3.0 <4.0.0"
   in_app_purchase_android: ">=0.5.0 <0.6.0"
   in_app_purchase_storekit: ">=0.4.0 <0.5.0"
