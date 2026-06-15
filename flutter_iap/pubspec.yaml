@@ -1,0 +1,31 @@
+name: influto_iap
+description: >-
+  Opt-in automatic store-purchase capture + historical back-sync for the InfluTo
+  Flutter SDK. Listens to in_app_purchase's purchaseStream and reports each purchase
+  to InfluTo. Keeps the core `influto` package zero-dependency; add this only if you
+  want hands-off store-direct purchase reporting.
+version: 1.0.0
+homepage: https://influ.to
+repository: https://github.com/influto/influto-flutter
+topics: [attribution, affiliate, influencer, in-app-purchase, revenuecat]
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Monorepo path dependency for local dev/CI. BEFORE PUBLISHING to pub.dev, swap this
+  # for a hosted constraint: `influto: ">=1.0.0 <2.0.0"`.
+  influto:
+    path: ../
+  in_app_purchase: ">=3.3.0 <4.0.0"
+  in_app_purchase_android: ">=0.5.0 <0.6.0"
+  in_app_purchase_storekit: ">=0.4.0 <0.5.0"
+  shared_preferences: ">=2.0.0 <3.0.0"
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ">=4.0.0 <6.0.0"

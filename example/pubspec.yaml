@@ -14,9 +14,9 @@ dependencies:
     sdk: flutter
   influto:
     path: ../
-  # Opt-in auto-capture companion (InfluToPurchaseObserver).
+  # Opt-in auto-capture companion (InfluToPurchaseObserver), vendored in this repo.
   influto_iap:
-    path: ../../flutter_iap
+    path: ../flutter_iap
   # Official IAP plugin. StoreKit 2 is the default on iOS 15+ (exposes the JWS at
   # verificationData.serverVerificationData); Android exposes the purchaseToken.
   in_app_purchase: ^3.3.0
