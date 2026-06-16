@@ -21,15 +21,18 @@ jobs:
         with:
           channel: stable
       - run: flutter --version
-      - run: flutter pub get
-      # Scope analysis to the published package (lib + test); the throwaway example/
+      # Main package (influto). Scope analysis to lib + test; the throwaway example/
       # is compile-checked by the ios-build job instead.
-      - run: flutter analyze lib test
-      - run: flutter test
+      - name: Analyze + test influto
+        working-directory: packages/influto
+        run: |
+          flutter pub get
+          flutter analyze lib test
+          flutter test
       # Companion package (influto_iap): resolve + analyze on Linux (free) so the auto-capture
       # one-time routing is compile-checked without needing the macOS example build.
       - name: Analyze influto_iap companion
-        working-directory: flutter_iap
+        working-directory: packages/influto_iap
         run: |
           flutter pub get
           flutter analyze lib

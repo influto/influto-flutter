@@ -13,10 +13,10 @@ dependencies:
   flutter:
     sdk: flutter
   influto:
-    path: ../
+    path: ../packages/influto
   # Opt-in auto-capture companion (InfluToPurchaseObserver), vendored in this repo.
   influto_iap:
-    path: ../flutter_iap
+    path: ../packages/influto_iap
   # Official IAP plugin. StoreKit 2 is the default on iOS 15+ (exposes the JWS at
   # verificationData.serverVerificationData); Android exposes the purchaseToken.
   in_app_purchase: ^3.3.0
@@ -26,3 +26,11 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+# This example builds against LOCAL source for both packages. influto_iap declares a
+# hosted `influto: ^1.0.0` (required so it publishes correctly), so without this override
+# pub refuses to mix the path + hosted sources for influto. Forcing influto to local source
+# is allowed here because the example is publish_to: none.
+dependency_overrides:
+  influto:
+    path: ../packages/influto

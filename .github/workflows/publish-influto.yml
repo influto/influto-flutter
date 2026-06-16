@@ -1,0 +1,29 @@
+name: Publish influto to pub.dev
+
+# Automated publishing via pub.dev OIDC trusted publishing — no stored credentials.
+# Uses the official dart-lang reusable workflow (pub.dev records it as the publisher).
+#
+# ONE-TIME setup on pub.dev (per package, by a package admin):
+#   pub.dev/packages/influto -> Admin -> Automated publishing -> Enable publishing from GitHub Actions
+#     Repository:  influto/influto-flutter
+#     Tag pattern: influto-v{{version}}
+#
+# To release a new version:
+#   1. bump `version:` in packages/influto/pubspec.yaml + update its CHANGELOG.md
+#   2. commit, then tag + push:
+#        git tag influto-v1.1.0 && git push origin influto-v1.1.0
+#   The tag's version must equal the pubspec version or pub.dev rejects the publish.
+
+on:
+  push:
+    tags:
+      # Main SDK only. `influto_iap-v*` starts with `influto_`, so it does NOT match.
+      - 'influto-v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+    permissions:
+      id-token: write # REQUIRED for pub.dev OIDC trusted publishing
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      working-directory: packages/influto
