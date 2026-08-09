@@ -24,7 +24,7 @@ class InfluTo {
   /// The shared singleton instance.
   static final InfluTo instance = InfluTo._();
 
-  static const String _sdkVersion = '1.0.0';
+  static const String _sdkVersion = '1.1.0';
 
   InfluToConfig? _config;
   ApiClient? _api;
@@ -106,7 +106,9 @@ class InfluTo {
         return AttributionResult.fromStored(
             jsonDecode(stored) as Map<String, dynamic>,);
       }
-      final resp = await _api!.postObject('/sdk/track-install', _deviceInfo());
+      final body = _deviceInfo();
+      body['device_id'] = await _installId();
+      final resp = await _api!.postObject('/sdk/track-install', body);
       final code = resp['referral_code'] as String?;
       if (resp['attributed'] == true && code != null) {
         final attribution = AttributionResult.fromResponse(resp);
@@ -116,15 +118,60 @@ class InfluTo {
         await _setRevenueCatAttributes(code);
         return attribution;
       }
-      return AttributionResult(
+      final organic = AttributionResult(
         attributed: false,
         message: resp['message'] as String? ?? 'No attribution found',
       );
+      // Persist the ORGANIC result too (contract 1.6.0): persisting only
+      // attributed results made every organic user re-POST track-install on
+      // every cold start. A thrown request (catch) persists nothing, so a
+      // failed attempt retries on the next launch.
+      await _storage!
+          .putString(Storage.attribution, jsonEncode(organic.toStored()));
+      return organic;
     } catch (e) {
       _log('checkAttribution error: $e');
       return const AttributionResult(
           attributed: false, message: 'Error checking attribution',);
     }
+  }
+
+  /// Per-install UUID, generated once and persisted (shared preferences).
+  Future<String> _installId() async {
+    final existing = _storage!.getString(Storage.installId);
+    if (existing != null) return existing;
+    final fresh = generateUuidV4();
+    await _storage!.putString(Storage.installId, fresh);
+    return fresh;
+  }
+
+  /// Once-only monetization events get a DETERMINISTIC id from
+  /// (type, user, sorted properties) so cross-launch re-fires collapse
+  /// server-side; other events get a random uuid.
+  static String _defaultEventId(
+    String eventType,
+    String appUserId,
+    Map<String, dynamic>? properties,
+  ) {
+    const onceOnly = {
+      'trial_started',
+      'subscription_purchased',
+      'subscription_renewed',
+    };
+    if (!onceOnly.contains(eventType)) return generateUuidV4();
+    final entries = (properties ?? const <String, dynamic>{})
+        .entries
+        .map((e) => '${e.key}=${e.value}')
+        .toList()
+      ..sort();
+    final canonical = entries.join('&');
+    var h = 0x811c9dc5;
+    for (final byte in canonical.codeUnits) {
+      h ^= byte;
+      h = (h * 0x01000193) & 0xFFFFFFFF;
+    }
+    final hex = h.toRadixString(16).padLeft(8, '0');
+    return 'det:$eventType:$appUserId:$hex';
   }
 
   // ----------------------------------------------------------------- identifyUser
@@ -161,7 +208,9 @@ class InfluTo {
         'appUserId': options.appUserId,
         if (options.properties != null) 'properties': options.properties,
         if (options.referralCode != null) 'referralCode': options.referralCode,
-        'eventId': options.eventId ?? generateUuidV4(),
+        'eventId': options.eventId ??
+            _defaultEventId(
+                options.eventType, options.appUserId, options.properties,),
       });
     } catch (e) {
       _log('trackEvent error: $e');

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0
+
+### Fixed
+- `checkAttribution()` no longer re-fires `/sdk/track-install` on every cold
+  start for organic users: the organic (non-attributed) result is now persisted
+  like the attributed one (contract 1.6.0). A failed request still retries on
+  the next launch.
+
+### Added
+- Persisted per-install UUID (`@influto/install_id`) sent as `device_id`, so
+  the backend counts unique devices instead of launches. No permissions, no
+  fingerprinting; resets on reinstall by design.
+- Deterministic `eventId` for once-only monetization events (`trial_started`,
+  `subscription_purchased`, `subscription_renewed`) derived from
+  (event type, user, properties) — cross-launch re-fires collapse server-side.
+
 ## 1.0.0
 
 Initial release of the InfluTo Flutter SDK.

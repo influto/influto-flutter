@@ -8,6 +8,8 @@ class Storage {
   static const String appUserId = '@influto/app_user_id';
   static const String initialized = '@influto/initialized';
   static const String access = '@influto/access';
+  /// Per-install UUID sent as device_id — backend counts devices, not launches.
+  static const String installId = '@influto/install_id';
 
   final SharedPreferences _prefs;
   Storage._(this._prefs);

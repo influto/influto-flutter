@@ -51,9 +51,9 @@ object stays in the response + SDK types for back-compat — it just isn't shown
 | Canonical method | Behavior |
 |---|---|
 | `initialize(config)` | POST `/sdk/init`; persist `@influto/initialized=true`. **THROWS on failure** (the only init-time throw). |
-| `checkAttribution()` | Return cached `@influto/attribution` if present; else POST `/sdk/track-install`, persist on `attributed`, set RC attributes. Fail-soft → `{attributed:false}`. |
+| `checkAttribution()` | Return cached `@influto/attribution` if present; else POST `/sdk/track-install` with the persisted per-install UUID (`@influto/install_id`, generated on first use) as `device_id`, then **persist the result — BOTH attributed AND organic** — and set RC attributes when attributed. Only a FAILED request persists nothing (retry next launch). Persisting only the attributed result (contract < 1.6.0) made every organic user re-fire track-install on every cold start — a launch counter, not an install counter. Wire body is snake_case (`device_id`, `os_version`, `screen_resolution`, `device_brand`, `device_model`). Fail-soft → `{attributed:false}` (not persisted). |
 | `identifyUser(appUserId, properties?)` | Persist `@influto/app_user_id`; POST `/sdk/identify`. Fail-soft (no throw). |
-| `trackEvent({eventType, appUserId, properties?, referralCode?, eventId?})` | Auto-generate `eventId` (uuid v4) if absent; POST `/sdk/event`. Fail-soft. |
+| `trackEvent({eventType, appUserId, properties?, referralCode?, eventId?})` | If `eventId` absent: once-only monetization types (`trial_started`, `subscription_purchased`, `subscription_renewed`) get a DETERMINISTIC id derived from (type, appUserId, canonical properties) so cross-launch re-fires collapse server-side; other types get uuid v4. POST `/sdk/event`. Fail-soft. |
 | `getActiveCampaigns()` | GET `/sdk/campaigns`. Fail-soft → `[]`. |
 | `getReferralCode()` | Local read of `@influto/influto_code`. |
 | `getPrefilledCode()` | Local: stored code only if `attribution.attributed`. |
