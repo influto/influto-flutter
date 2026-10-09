@@ -24,7 +24,7 @@ class InfluTo {
   /// The shared singleton instance.
   static final InfluTo instance = InfluTo._();
 
-  static const String _sdkVersion = '1.1.0';
+  static const String _sdkVersion = '1.1.1';
 
   InfluToConfig? _config;
   ApiClient? _api;
@@ -280,7 +280,11 @@ class InfluTo {
 
   // --------------------------------------------------------------- setReferralCode
 
-  /// Persist code + attribution, set RC attributes, POST `/sdk/set-referral-code`.
+  /// POST `/sdk/set-referral-code`; only once the backend accepts the code
+  /// (`success == true`) persist it + the attribution record and set the RC
+  /// attributes, so a rejected code is never stored or tagged. [appUserId]
+  /// defaults to the user stored by [identifyUser] — free-access codes need one
+  /// (`MISSING_USER_ID` otherwise). Fail-soft.
   Future<SetCodeResult> setReferralCode(String code,
       {String? appUserId,}) async {
     if (!_initialized) {
@@ -289,26 +293,34 @@ class InfluTo {
     }
     final normalized = code.trim().toUpperCase();
     try {
-      await _storage!.putString(Storage.influtoCode, normalized);
-      final attribution = AttributionResult(
-        attributed: true,
-        referralCode: normalized,
-        attributionMethod: 'manual_entry',
-        clickedAt: DateTime.now().toUtc().toIso8601String(),
-        message: 'Manually entered code',
-      );
-      await _storage!
-          .putString(Storage.attribution, jsonEncode(attribution.toStored()));
-      await _setRevenueCatAttributes(normalized);
       if (appUserId != null) {
         await _storage!.putString(Storage.appUserId, appUserId);
       }
+      final uid = appUserId ?? _storage!.getString(Storage.appUserId);
 
       final resp = await _api!.postObject('/sdk/set-referral-code', {
         'code': normalized,
-        if (appUserId != null) 'app_user_id': appUserId,
+        if (uid != null) 'app_user_id': uid,
       });
-      return SetCodeResult.fromJson(resp);
+      final result = SetCodeResult.fromJson(resp);
+      if (result.success) {
+        // Prefer the canonical (matched) code the backend returns over the input.
+        final returned = result.code;
+        final accepted =
+            (returned != null && returned.isNotEmpty) ? returned : normalized;
+        await _storage!.putString(Storage.influtoCode, accepted);
+        final attribution = AttributionResult(
+          attributed: true,
+          referralCode: accepted,
+          attributionMethod: 'manual_entry',
+          clickedAt: DateTime.now().toUtc().toIso8601String(),
+          message: 'Manually entered code',
+        );
+        await _storage!.putString(
+            Storage.attribution, jsonEncode(attribution.toStored()),);
+        await _setRevenueCatAttributes(accepted);
+      }
+      return result;
     } catch (e) {
       _log('setReferralCode error: $e');
       return SetCodeResult(success: false, message: 'Failed to set code: $e');

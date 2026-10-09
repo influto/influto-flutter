@@ -1,12 +1,12 @@
-<!-- Vendored copy of the canonical InfluTo SDK wire contract (v1.0.0). Keep this in sync across the InfluTo SDKs — edit the canonical source, not this copy. -->
+<!-- Vendored copy of the canonical InfluTo SDK wire contract (v1.6.0). Keep this in sync across the InfluTo SDKs — edit the canonical source, not this copy. -->
 
 # InfluTo SDK — Canonical Cross-Platform Contract
 
 **This is the single source of truth every InfluTo SDK (React Native, iOS/Swift,
-Android/Kotlin, Flutter, future Web) must obey byte-for-byte.** Shapes come from the
+Android/Kotlin, Flutter, Web) must obey byte-for-byte.** Shapes come from the
 InfluTo backend; behaviors that OpenAPI can't express are pinned here.
 
-Wire version: **1.0.0**
+Wire version: **1.6.0**
 
 ---
 
@@ -21,14 +21,14 @@ Wire version: **1.0.0**
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| POST | `/sdk/init` | `{app_version, sdk_version, platform:"ios"\|"android"}` | `{app_id, app_name, attribution_window_hours, campaigns[], store_direct, initialized}` |
-| POST | `/sdk/track-install` | `{platform, device_id?, device_brand?, device_model?, os_version?, screen_resolution?, timezone?, language?}` | `{attributed, referral_code?, attribution_method?, clicked_at?, message}` |
+| POST | `/sdk/init` | `{app_version, sdk_version, platform:"ios"\|"android"\|"web", sdk_name?, runtime?}` (web SDK adds `sdk_name:"web"` + `runtime`) | `{app_id, app_name, attribution_window_hours, campaigns[], store_direct, initialized}` |
+| POST | `/sdk/track-install` | `{platform, device_id?, device_brand?, device_model?, os_version?, screen_resolution?, timezone?, language?, referral_code?, click_id?}` (the last two: web launch-URL / Play Install Referrer claim) | `{attributed, referral_code?, attribution_method?, clicked_at?, message}` |
 | POST | `/sdk/identify` | `{app_user_id, properties?}` | `{identified, app_user_id}` |
 | POST | `/sdk/event` | `{eventType, appUserId, properties?, referralCode?, eventId?}` (camelCase on the wire — see §4) | `{tracked, event_id, duplicate?, dedup_reason?}` |
 | GET | `/sdk/campaigns` | — | `[{id, name, description, commission_percentage}]` |
 | POST | `/sdk/validate-code` | `{code}` | `{valid, code?, campaign?{id,name,description,commission_percentage,campaign_type}, influencer?{name,social_handle,follower_count}, custom_data?, message?, error?, error_code?}` |
-| POST | `/sdk/set-referral-code` | `{code, app_user_id?}` | `{success, code?, message, campaign?{id,name}, free_access?, grants_access?, entitlement?, expires_at?}` |
-| POST | `/sdk/purchase` | `{platform, app_user_id?, signedTransaction?, purchaseToken?, productId?, price?, currency?, referralCode?}` (store-direct) | `{success, validated:"apple"\|"google", environment, event_type, duplicate, recorded, result}` |
+| POST | `/sdk/set-referral-code` | `{code, app_user_id?}` | `{success, code?, message, campaign?{id,name}, free_access?, grants_access?, entitlement?, expires_at?, rc_grant?{attempted,ok,error}}` |
+| POST | `/sdk/purchase` | `{platform, appUserId?, signedTransaction?, purchaseToken?, productId?, price?, currency?, referralCode?}` (store-direct; snake_case aliases such as `app_user_id` are accepted) | `{success, validated:"apple"\|"google", environment, event_type, duplicate, recorded, result}` |
 | GET | `/sdk/attribution?app_user_id=` | — | attribution data |
 | GET | `/sdk/access?app_user_id=` | — | `{has_access, source:"comp"\|null, entitlement?, expires_at?, code?}` |
 
@@ -58,7 +58,7 @@ object stays in the response + SDK types for back-compat — it just isn't shown
 | `getReferralCode()` | Local read of `@influto/influto_code`. |
 | `getPrefilledCode()` | Local: stored code only if `attribution.attributed`. |
 | `validateCode(code)` | Normalize (trim + UPPERCASE); POST `/sdk/validate-code`. Fail-soft → `{valid:false, error_code:"NETWORK_ERROR"}`. |
-| `setReferralCode(code, appUserId?)` | Normalize; persist code + a `manual_entry` attribution record; set RC attributes; POST `/sdk/set-referral-code`. Fail-soft → `{success:false}`. |
+| `setReferralCode(code, appUserId?)` | Normalize; `appUserId` defaults to the stored `@influto/app_user_id`; POST `/sdk/set-referral-code`; only when the server answers `success:true`, persist the code (the server's canonical `code` when returned) + a `manual_entry` attribution record and set RC attributes (a rejected code is never stored or tagged — React Native 1.6.1, iOS/Android/Flutter 1.1.1 and later). Fail-soft → `{success:false}`. |
 | `applyCode(code, appUserId?)` | `validateCode` then `setReferralCode` if valid; adds `applied`. |
 | `clearAttribution()` | Local clear of the 3 keys. |
 | **`reportPurchase({platform, signedTransaction?, purchaseToken?, productId?, price?, currency?, appUserId?, referralCode?})`** | **NEW.** Store-direct. `productId`/`price`/`currency` are for Android **one-time** products only (route to NON_RENEWING validation; omit for subscriptions — see §9). Default `referralCode` to stored `@influto/influto_code`. POST `/sdk/purchase`. **THROWS on failure**; a **503** means FX-unavailable → caller should retry. |
@@ -76,12 +76,15 @@ object stays in the response + SDK types for back-compat — it just isn't shown
    with the backend, which also uppercases).
 3. **Local persistence.** All local keys live under the prefix `@influto/`, exactly:
    `@influto/attribution` (JSON), `@influto/influto_code`, `@influto/app_user_id`,
-   `@influto/initialized`. Byte-identical across SDKs.
+   `@influto/initialized`, `@influto/install_id` (random per-install ID, since 1.6.0) and
+   `@influto/access` (cached positive `checkAccess`, 5 min). Byte-identical across SDKs.
+   SDKs that capture purchases may keep their own `@influto/…` bookkeeping keys; the web
+   SDK also keeps `@influto/launch_code`.
 4. **Fail-soft.** Network/parse errors return a benign value and NEVER throw to the host —
    EXCEPT `initialize` and `reportPurchase`, which throw. Fallback shapes:
    `checkAttribution → {attributed:false}`, `getActiveCampaigns → []`,
    `validateCode → {valid:false, error_code:"NETWORK_ERROR"}`, `setReferralCode → {success:false}`.
-5. **RevenueCat attributes.** On attribution found AND on
+5. **RevenueCat attributes.** On attribution found AND on a successful (`success:true`)
    `setReferralCode`/`applyCode`, set these RevenueCat subscriber attributes (if the host
    uses RevenueCat). The backend's RC webhook + Targeting rules read them:
 
@@ -133,6 +136,10 @@ object stays in the response + SDK types for back-compat — it just isn't shown
    Seat caps + expiry are server-enforced; a later-blocked/expired code revokes access for all
    holders on the next `checkAccess`. `setReferralCode`/`applyCode` also return
    `free_access`/`grants_access`/`entitlement`/`expires_at` so the app can unlock immediately.
+   The response additionally carries an ADDITIVE diagnostic `rc_grant {attempted, ok, error}`
+   for the optional RevenueCat promotional-entitlement mirror — native access is granted
+   regardless of `rc_grant.ok`, so treat it as observability, never as a gate. The RC mirror is
+   configured self-serve on the dashboard (App Settings → Validation → "Creator free-access codes").
 
 ## 5. Verification
 
@@ -140,8 +147,33 @@ Each SDK's unit suite replays the `fixtures/*.json` golden request/response pair
 mocked HTTP layer and asserts the SDK maps identical wire bytes to identical public types.
 A live backend can additionally be checked with Schemathesis against `/openapi.json`.
 
-Backend end-to-end check after a sample-app run:
-`GET /api/apps/{id}/events/recent` →
+Backend end-to-end check after a sample-app run (agent surface — Bearer `it_mcp_*` agent key or
+OAuth token; the dashboard's `/api/apps/*` routes are session-only and reject API keys):
+`GET /api/agent/apps/{id}/events/recent` →
 - `sdk_events[]` shows each `trackEvent` exactly once (dedup) with the right `referral_code` + `platform`;
 - `webhooks[]` shows a `reportPurchase` with `"attributed": true` + the matching `referral_code`
   (organic shows `"organic": true`, `referral_code: null`).
+
+## 6. Web SDK (`@influto/web`) — additions, not deviations
+
+Runs in Capacitor / Ionic, Cordova, PWAs / TWAs and browsers. Same endpoints, keys, dedup and
+fail-soft rules; these are the web-only extras:
+
+- **`platform`** = the native OS inside Capacitor/Cordova (`Capacitor.getPlatform()` / `device.platform`);
+  in a browser/PWA it is derived from the User-Agent exactly like the referral link classifies a click
+  (phones → `ios`/`android`, everything else → `web`) so clicks and installs match. `/sdk/init` also carries
+  `sdk_name:"web"` and `runtime` ∈ `capacitor|cordova|twa|pwa|browser`.
+- **Deterministic handoff.** Referral links send web visitors (and every visitor of a web-only app) to
+  `apps.web_app_url` with `?influto_code=CODE&influto_click=<click id>`; Play links carry the same pair in the
+  Play `referrer` parameter. The SDK stores them under `@influto/launch_code` (`captureLaunchCode(url)` /
+  `captureInstallReferrer(referrer)`), sends `referral_code` + `click_id` on `/sdk/track-install`, and the
+  backend claims that click (`attribution_method:"link_param"`, response adds `click_id`). A pre-existing
+  ORGANIC decision is re-opened by a captured launch code; the stored code is cleared once decided.
+- **Seams** (`InfluToConfig`): `storage` (localStorage default, Capacitor Preferences adapter), `device`,
+  `http` (fetch default), `revenueCat` (function or object with `setAttributes(map)` — Capacitor ≥ 7.5.10,
+  Cordova and purchases-js all take a flat string map; the binding retries because purchases-js does not),
+  `purchaseSource` (`digitalGoodsSource()`, `capgoNativePurchasesSource()`, `cordovaPurchaseSource()`).
+- **Auto-capture** starts on `initialize()` only when `/sdk/init` returns `store_direct:true` AND a
+  `purchaseSource` is attached. `reportPurchase()` in a browser runtime requires an explicit `platform`.
+- Compiled to ES2019 (Capacitor's Chrome-60 WebView floor); `crypto.randomUUID` has a `getRandomValues` /
+  `Math.random` fallback.

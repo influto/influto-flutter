@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1
+
+### Fixed
+- `setReferralCode()` / `applyCode()` fall back to the user stored by
+  `identifyUser()` when `appUserId` isn't passed. Without it the backend
+  rejected free-access codes with `MISSING_USER_ID`.
+- `setReferralCode()` stores the code (and the `manual_entry` attribution
+  record) and calls the `revenueCatHook` only after the backend answers
+  `success == true`, using the canonical code it returns. A rejected code is
+  no longer stored or tagged. Still fail-soft.
+- `ReferralCodeInput`: the field no longer drops `_` (codes allow
+  `[A-Z0-9_-]`), and `onApplied` fires only when the code was actually applied
+  (`applied == true`), not merely valid.
+
 ## 1.1.0
 
 ### Fixed

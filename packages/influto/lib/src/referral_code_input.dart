@@ -112,7 +112,8 @@ class _ReferralCodeInputState extends State<ReferralCodeInput> {
     final res = await InfluTo.instance.applyCode(_controller.text, appUserId: widget.appUserId);
     if (!mounted) return;
     _result = res;
-    if (res.applied == true || res.valid) {
+    // Only a code the server actually applied counts — `valid` alone is not enough.
+    if (res.applied == true) {
       widget.onApplied?.call(res);
       setState(() => _state = _RefState.applied);
     } else {
@@ -149,7 +150,8 @@ class _ReferralCodeInputState extends State<ReferralCodeInput> {
         enableSuggestions: false,
         maxLength: 20,
         inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9-]')),
+          // Codes are [A-Z0-9_-]: keep letters, digits, '-' and '_'.
+          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_-]')),
           _UpperCaseFormatter(),
         ],
         decoration: InputDecoration(
